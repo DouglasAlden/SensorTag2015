@@ -127,7 +127,7 @@ try:
     outputData = "%s,%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, hostname, adr, ht, h, lux)
     print outputData
     
-    data = open("/home/wind/ble/log/sensortag/"+hostname+"_"+adr, "w")
+    data = open("/home/wind/ble/log/sensortag/"+hostname+"_"+adr+".log", "a")
     data.write("%s\n" % outputData)
     data.close()
 
