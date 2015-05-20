@@ -25,6 +25,7 @@
 # Revisions:
 # 19 May 2015 - Douglas Alden
 #   Revised for humidity and added lux for SensorTag 2.0
+import math
 
 tosigned = lambda n: float(n-0x10000) if n>0x7fff else float(n)
 tosignedbyte = lambda n: float(n-0x100) if n>0x7f else float(n)
@@ -68,10 +69,15 @@ def calcHum(rawT, rawH):
 
 # TI OPT3001
 # http://www.ti.com/product/opt3001
-# Calculation based on checking raw output against that output by iOS app
+# From Sensor.java in TI's Android repository
+#http://git.ti.com/sensortag-android/sensortag-android/blobs/master/src/com/example/ti/ble/sensortag/Sensor.java
 def calcLux(rawLux):
     # -- calculate lux --
-    lux =  rawLux / 100.0
+    mantissa = rawLux & 0x0FFF
+    exponent = (rawLux >> 12) & 0xF
+    magnitude = math.pow(2.0, exponent)
+    lux = mantissa * magnitude / 100.0
+    #lux =  rawLux / 100.0
     return (lux)
 
 #

@@ -38,6 +38,9 @@ import time
 from datetime import datetime
 import pexpect
 from sensortag_funcs import *
+import socket
+
+hostname = socket.gethostname()
 
 # start gatttool
 adr = sys.argv[1]
@@ -119,11 +122,13 @@ try:
     dt = datetime.utcnow().isoformat()
     # replace T between date and time with a comma
     dt = dt.replace('T',',')
-    print "%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, adr, ht, h, lux)
+    # Truncate the time. We do not need microsec resolution
+    dt = dt[:21]
+    outputData = "%s,%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, hostname, adr, ht, h, lux)
+    print outputData
     
-    data = open("/home/wind/ble/log/sensortag/"+adr, "w")
-    #data.write("%s,%s,IR,%.1f,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, adr, it, ht, h, lux))
-    data.write("%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, adr, ht, h, lux))
+    data = open("/home/wind/ble/log/sensortag/"+hostname+"_"+adr, "w")
+    data.write("%s\n" % outputData)
     data.close()
 
     time.sleep(1)
