@@ -21,12 +21,12 @@
 #
 # Read sensors from the TI SensorTag. It's a
 # BLE (Bluetooth low energy) device so by
-# automating gatttool (from BlueZ 5.14) with
+# automating gattsensortag (from BlueZ 5.14) with
 # pexpect (3.1) we are able to read and write values.
 #
 # Usage: sensortag_test.py BLUETOOTH_ADR
 #
-# To find the address of your SensorTag run 'sudo hcitool lescan'
+# To find the address of your SensorTag run 'sudo hcisensortag lescan'
 # To power up your bluetooth dongle run 'sudo hciconfig hci0 up'
 #
 # Revisions:
@@ -40,82 +40,97 @@ import pexpect
 from sensortag_funcs import *
 import socket
 
+DEBUG = 0
+
 hostname = socket.gethostname()
 
-# start gatttool
-adr = sys.argv[1]
-tool = pexpect.spawn('gatttool -b ' + adr + ' --interactive')
-tool.expect('\[LE\]>')
+# Connect to SensorTag using gatttool
+bluetooth_adr = sys.argv[1]
+sensortag = pexpect.spawn('gatttool -b ' + bluetooth_adr + ' --interactive')
+# bug in pexpect? automating gattsensortag works only if we are using a logfile!
+# TODO: check again with pexpect 3.1 and gattsensortag 5.14
+if DEBUG==0:
+  logfile = open("/dev/null", "w")
+  sensortag.logfile = logfile
+else:
+  sensortag.logfile = sys.stdout
 
-# bug in pexpect? automating gatttool works only if we are using a logfile!
-# TODO: check again with pexpect 3.1 and gatttool 5.14
-logfile = open("/dev/null", "w")
-tool.logfile = logfile
+try:
+  sensortag.expect(['\[LE\]>', pexpect.TIMEOUT], timeout=5)
+except pexpect.TIMEOUT:
+    print '\ngatttool could not find SensorTag', bluetooth_adr
+    sensortag.kill(0)
+    sys.exit (1)
+
 
 # connect to SensorTag
-print adr, " Trying to connect. You might need to press the side button ..."
-tool.sendline('connect')
-tool.expect('\[LE\]>')
+try:
+  print bluetooth_adr, "\nTrying to connect. You might need to press the side button ..."
+  sensortag.sendline('connect')
+  sensortag.expect('Connection successful', timeout=5)
+  sensortag.expect('\[LE\]>')
+except pexpect.TIMEOUT:
+  print '\nUnable to initiate connection to SensorTag', bluetooth_adr
+  sensortag.kill(0)
+  sys.exit (1)
 
-print adr, " Enabling sensors ..."
+
+print "Enabling sensors on SensorTag: ", bluetooth_adr
 
 # enable IR temperature sensor (TI TMP0007)
-#tool.sendline('char-write-cmd 0x24 01')
-#tool.expect('\[LE\]>')
+#sensortag.sendline('char-write-cmd 0x24 01')
+#sensortag.expect('\[LE\]>')
 
 # enable humidity sensor (TI HDC1000)
-tool.sendline('char-write-cmd 0x2C 01')
-tool.expect('\[LE\]>')
+sensortag.sendline('char-write-cmd 0x2C 01')
+sensortag.expect('\[LE\]>')
 
 # enable lux sensor (TI OPT3001)
-tool.sendline('char-write-cmd 0x44 01')
-tool.expect('\[LE\]>')
+sensortag.sendline('char-write-cmd 0x44 01')
+sensortag.expect('\[LE\]>')
 
 # enable barometric pressure sensor (Bosch Sensortec BMP280)
-#tool.sendline('char-write-cmd 0x34 02')
-#tool.expect('\[LE\]>')
+#sensortag.sendline('char-write-cmd 0x34 02')
+#sensortag.expect('\[LE\]>')r2
 
-#tool.sendline('char-read-hnd 0x52')
-#tool.expect('descriptor: .*? \r')
+#sensortag.sendline('char-read-hnd 0x52')
+#sensortag.expect('descriptor: .*? \r')
 
-#after = tool.after
+#after = sensortag.after
 #v = after.split()[1:] 
 #vals = [long(float.fromhex(n)) for n in v]
 #barometer = Barometer( vals )
-#tool.sendline('char-write-cmd 0x4f 01')
-#tool.expect('\[LE\]>')
+#sensortag.sendline('char-write-cmd 0x4f 01')
+#sensortag.expect('\[LE\]>')
 
 
 # wait for the sensors to become ready
-time.sleep(2)
+time.sleep(1)
 
 cnt = 0
 try:
   while True:
 
-    cnt = cnt + 1
-    #print adr, " CNT %d" % cnt
-
     # read IR temperature sensor
-    # tool.sendline('char-read-hnd 0x25')
-    # tool.expect('descriptor: .*? \r') 
-    # v = tool.after.split()
+    # sensortag.sendline('char-read-hnd 0x25')
+    # sensortag.expect('descriptor: .*? \r') 
+    # v = sensortag.after.split()
     # rawObjT = long(float.fromhex(v[2] + v[1]))
     # rawAmbT = long(float.fromhex(v[4] + v[3]))
     # (at, it) = calcTmp(rawAmbT, rawObjT)
 
     # read humidity sensor (
-    tool.sendline('char-read-hnd 0x29')
-    tool.expect('descriptor: .*? \r') 
-    v = tool.after.split()
+    sensortag.sendline('char-read-hnd 0x29')
+    sensortag.expect('descriptor: .*? \r') 
+    v = sensortag.after.split()
     rawT = long(float.fromhex(v[2] + v[1]))
     rawH = long(float.fromhex(v[4] + v[3]))
     (ht, h) = calcHum(rawT, rawH)
 
     # read lux sensor
-    tool.sendline('char-read-hnd 0x41')
-    tool.expect('descriptor: .*? \r') 
-    v = tool.after.split()
+    sensortag.sendline('char-read-hnd 0x41')
+    sensortag.expect('descriptor: .*? \r') 
+    v = sensortag.after.split()
     rawLux = long(float.fromhex(v[2] + v[1]))
     lux = calcLux(rawLux)
 
@@ -124,15 +139,21 @@ try:
     dt = dt.replace('T',',')
     # Truncate the time. We do not need microsec resolution
     dt = dt[:21]
-    outputData = "%s,%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, hostname, adr, ht, h, lux)
+    
+    # remove colons from address
+    bluetooth_adr = bluetooth_adr.replace(':','-')
+    
+    outputData = "%s,%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, hostname, bluetooth_adr, ht, h, lux)
     print outputData
     
-    data = open("/home/wind/ble/log/sensortag/"+hostname+"_"+adr+".log", "a")
+    data = open("/home/wind/metdata/log/sensortag/"+hostname+".log", "a")
     data.write("%s\n" % outputData)
     data.close()
 
-    time.sleep(1)
+    time.sleep(0.6)
+    
 except KeyboardInterrupt as e:
   # Print backspace to eat control-C
   print "\b\bExiting..."
+  sys.exit (0)
 
