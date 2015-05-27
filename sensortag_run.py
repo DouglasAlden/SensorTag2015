@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 
 #
 # Copyright 2013 Michael Saunby
@@ -46,7 +46,7 @@ hostname = socket.gethostname()
 
 # Connect to SensorTag using gatttool
 bluetooth_adr = sys.argv[1]
-sensortag = pexpect.spawn('gatttool -b ' + bluetooth_adr + ' --interactive')
+sensortag = pexpect.spawn('/usr/local/bin/gatttool -b ' + bluetooth_adr + ' --interactive')
 # bug in pexpect? automating gattsensortag works only if we are using a logfile!
 # TODO: check again with pexpect 3.1 and gattsensortag 5.14
 if DEBUG==0:
@@ -56,7 +56,7 @@ else:
   sensortag.logfile = sys.stdout
 
 try:
-  sensortag.expect(['\[LE\]>', pexpect.TIMEOUT], timeout=5)
+  sensortag.expect(['\[LE\]>', pexpect.TIMEOUT], timeout=10)
 except pexpect.TIMEOUT:
     print '\ngatttool could not find SensorTag', bluetooth_adr
     sensortag.kill(0)
@@ -144,16 +144,26 @@ try:
     bluetooth_adr = bluetooth_adr.replace(':','-')
     
     outputData = "%s,%s,%s,T,%.1f,RH,%.1f,Lux,%.1f " % (dt, hostname, bluetooth_adr, ht, h, lux)
-    print outputData
+    if DEBUG:
+      print outputData
     
     data = open("/home/wind/metdata/log/sensortag/"+hostname+".log", "a")
     data.write("%s\n" % outputData)
     data.close()
 
     time.sleep(0.6)
-    
-except KeyboardInterrupt as e:
+
+except KeyboardInterrupt:
   # Print backspace to eat control-C
   print "\b\bExiting..."
+
+except pexpect.TIMEOUT:
+  print "\nSensorTag communication lost\n"
+    
+finally:
+  if data:
+    data.close()
+  if sensortag:
+    sensortag.kill(0)
   sys.exit (0)
 
